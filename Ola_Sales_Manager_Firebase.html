@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#14532d">
+<title>Ola Sales Manager</title>
+<style>
+:root{--green:#14532d;--light:#f0fdf4;--border:#d1d5db;--ink:#17211b;--muted:#647067;--red:#b91c1c}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f5f7f5;color:var(--ink)}
+header{background:var(--green);color:white;padding:18px 16px}header h1{font-size:22px;margin:0}header p{margin:5px 0 0;font-size:13px;opacity:.9}
+main{max-width:980px;margin:auto;padding:14px}.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 7px #00000008}
+h2{font-size:18px;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+label{display:block;font-size:13px;font-weight:650;margin:8px 0 5px}input,select,button{font:inherit;width:100%;padding:11px;border:1px solid var(--border);border-radius:9px;background:white}button{background:var(--green);color:white;border:0;font-weight:700;cursor:pointer;margin-top:10px}button.secondary{background:#e5e7eb;color:#17211b}button.danger{background:var(--red)}button.small{width:auto;padding:7px 10px;margin:2px;font-size:12px}
+.muted{color:var(--muted);font-size:13px}.hidden{display:none!important}.status{padding:10px;border-radius:9px;background:var(--light);margin:10px 0;font-size:13px;white-space:pre-wrap}.error{background:#fef2f2;color:#991b1b}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.stat{padding:13px;border-radius:10px;background:var(--light)}.stat strong{display:block;font-size:20px}.stat span{font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid #e5e7eb}th{color:#475569} .tablewrap{overflow-x:auto}.rowactions{white-space:nowrap}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header><h1>Ola Sales Manager</h1><p>Private business manager · Firebase-connected edition</p></header>
+<main>
+<div id="message" class="status">Connect to the internet to sign in and load your business records.</div>
+<section id="loginCard" class="card">
+<h2>Owner sign in</h2>
+<p class="muted">Use the email and password you created in Firebase Authentication.</p>
+<label for="email">Email address</label><input id="email" type="email" autocomplete="username" placeholder="Your email">
+<label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Your password">
+<button id="loginBtn">Sign in</button>
+</section>
+<section id="app" class="hidden">
+<div class="card">
+<div class="grid"><div><h2>Business overview</h2><p class="muted">Amounts shown in Nigerian naira (₦).</p></div><div><button id="refreshBtn" class="secondary">Refresh records</button><button id="logoutBtn" class="danger">Sign out</button></div></div>
+<div class="stats">
+<div class="stat"><strong id="productCount">0</strong><span>Products</span></div>
+<div class="stat"><strong id="stockCount">0</strong><span>Total stock units</span></div>
+<div class="stat"><strong id="todaySales">₦0</strong><span>Today's sales</span></div>
+<div class="stat"><strong id="allSales">₦0</strong><span>Recorded sales total</span></div>
+</div>
+</div>
+<div class="card"><h2>Add a product</h2>
+<div class="grid">
+<div><label for="pname">Product name</label><input id="pname" placeholder="e.g. SAV sticker roll"></div>
+<div><label for="pbuy">Buying price (₦)</label><input id="pbuy" type="number" min="0" step="0.01" value="0"></div>
+<div><label for="psell">Selling price (₦)</label><input id="psell" type="number" min="0" step="0.01" value="0"></div>
+<div><label for="pstock">Opening stock quantity</label><input id="pstock" type="number" min="0" step="1" value="0"></div>
+</div><button id="addProductBtn">Save product</button>
+</div>
+<div class="card"><h2>Products & stock</h2><div class="tablewrap"><table><thead><tr><th>Product</th><th>Buy ₦</th><th>Sell ₦</th><th>Stock</th><th>Action</th></tr></thead><tbody id="productsBody"><tr><td colspan="5">Sign in to load products.</td></tr></tbody></table></div></div>
+<div class="card"><h2>Record a sale</h2>
+<div class="grid">
+<div><label for="saleProduct">Product</label><select id="saleProduct"><option value="">Choose product</option></select></div>
+<div><label for="saleQty">Quantity sold</label><input id="saleQty" type="number" min="1" step="1" value="1"></div>
+<div><label for="customerName">Customer name</label><input id="customerName" placeholder="Customer name"></div>
+<div><label for="customerPhone">Customer phone (optional)</label><input id="customerPhone" type="tel" placeholder="Phone number"></div>
+<div><label for="paidAmount">Amount paid (₦)</label><input id="paidAmount" type="number" min="0" step="0.01" value="0"></div>
+</div><p class="muted">The sale total is calculated from the product selling price. Outstanding balance is recorded if payment is partial.</p><button id="recordSaleBtn">Record sale and update stock</button>
+</div>
+<div class="card"><h2>Sales history</h2><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Product</th><th>Qty</th><th>Customer</th><th>Total ₦</th><th>Paid ₦</th><th>Balance ₦</th></tr></thead><tbody id="salesBody"><tr><td colspan="7">Sign in to load sales.</td></tr></tbody></table></div></div>
+<div class="card"><h2>Payment details</h2><p class="muted">These details are saved in your browser session on this device only in this version. Do not enter banking passwords or PINs.</p>
+<div class="grid"><div><label for="bankName">Bank / provider</label><input id="bankName" placeholder="e.g. OPay"></div><div><label for="accountName">Account name</label><input id="accountName" placeholder="Account holder name"></div><div><label for="accountNumber">Account number</label><input id="accountNumber" inputmode="numeric" placeholder="Account number"></div></div><button id="savePaymentBtn" class="secondary">Save payment details on this device</button>
+</div>
+</section>
+<footer>Ola Sales Manager · Keep regular backups of your business records.</footer>
+</main>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD7n7LhL1kqGQSIG9NuqsM_lIeMAp_boJY",
+  authDomain: "ola-sales-manager.firebaseapp.com",
+  projectId: "ola-sales-manager",
+  storageBucket: "ola-sales-manager.firebasestorage.app",
+  messagingSenderId: "1024602006134",
+  appId: "1:1024602006134:web:27b38ead660c422fd13557"
+};
+const OWNER_UID = "DlGMMuuxjSWLFry5mGOzfGMQvSh1";
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const $ = id => document.getElementById(id);
+let products = [], sales = [];
+
+function message(text, error=false){$("message").textContent=text;$("message").classList.toggle("error",error);}
+function money(n){return "₦"+Number(n||0).toLocaleString("en-NG",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function requireOwner(){if(!auth.currentUser || auth.currentUser.uid!==OWNER_UID) throw new Error("This account is not the configured owner account. Sign in with the owner account.");}
+async function loadData(){
+ requireOwner();
+ const [pSnap,sSnap]=await Promise.all([getDocs(collection(db,"products")),getDocs(collection(db,"sales"))]);
+ products=pSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+ sales=sSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+ render();
+ message("Connected. Products and sales loaded from Firebase.");
+}
+function render(){
+ $("productCount").textContent=products.length;
+ $("stockCount").textContent=products.reduce((s,p)=>s+Number(p.stock||0),0);
+ const start=new Date();start.setHours(0,0,0,0);
+ const today=sales.filter(s=>{const d=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||0);return d>=start;}).reduce((n,s)=>n+Number(s.total||0),0);
+ $("todaySales").textContent=money(today);
+ $("allSales").textContent=money(sales.reduce((n,s)=>n+Number(s.total||0),0));
+ $("productsBody").innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${money(p.buyPrice)}</td><td>${money(p.sellPrice)}</td><td>${Number(p.stock||0)}</td><td class="rowactions"><button class="small secondary" data-edit="${p.id}">Edit</button><button class="small danger" data-delete="${p.id}">Delete</button></td></tr>`).join(""):'<tr><td colspan="5">No products yet. Add your first product above.</td></tr>';
+ $("saleProduct").innerHTML='<option value="">Choose product</option>'+products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.sellPrice)} (stock ${Number(p.stock||0)})</option>`).join("");
+ $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}</td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(s.balance)}</td></tr>`}).join(""):'<tr><td colspan="7">No sales recorded yet.</td></tr>';
+}
+$("loginBtn").addEventListener("click",async()=>{try{message("Signing in…");await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);$("password").value="";}catch(e){message("Sign-in failed: "+(e.message||e),true);}});
+$("logoutBtn").addEventListener("click",async()=>{await signOut(auth);});
+$("refreshBtn").addEventListener("click",async()=>{try{await loadData();}catch(e){message("Could not load records: "+e.message,true);}});
+onAuthStateChanged(auth,async user=>{
+ if(!user){$("loginCard").classList.remove("hidden");$("app").classList.add("hidden");message("Sign in with your Firebase owner email and password.");return;}
+ if(user.uid!==OWNER_UID){await signOut(auth);message("Access denied: this app is configured for the registered owner account only.",true);return;}
+ $("loginCard").classList.add("hidden");$("app").classList.remove("hidden");
+ try{await loadData();}catch(e){message("Signed in, but data could not load. Check Firestore rules and internet connection. "+e.message,true);}
+});
+$("addProductBtn").addEventListener("click",async()=>{
+ try{requireOwner();const name=$("pname").value.trim(),buyPrice=Number($("pbuy").value),sellPrice=Number($("psell").value),stock=Number($("pstock").value);
+ if(!name||buyPrice<0||sellPrice<0||stock<0||!Number.isInteger(stock))throw new Error("Enter a product name and valid non-negative prices and whole-number stock.");
+ await addDoc(collection(db,"products"),{name,buyPrice,sellPrice,stock,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+ $("pname").value="";$("pbuy").value="0";$("psell").value="0";$("pstock").value="0";await loadData();
+ }catch(e){message("Could not save product: "+e.message,true);}
+});
+$("productsBody").addEventListener("click",async e=>{
+ const edit=e.target.dataset.edit,del=e.target.dataset.delete;
+ try{requireOwner();
+ if(edit){const p=products.find(x=>x.id===edit);if(!p)return;const name=prompt("Product name:",p.name);if(name===null)return;const sell=prompt("Selling price (₦):",p.sellPrice);if(sell===null)return;const buy=prompt("Buying price (₦):",p.buyPrice);if(buy===null)return;const stock=prompt("Stock quantity:",p.stock);if(stock===null)return;
+ const b=Number(buy),s=Number(sell),q=Number(stock);if(!name.trim()||b<0||s<0||q<0||!Number.isInteger(q))throw new Error("Invalid product details.");
+ await updateDoc(doc(db,"products",edit),{name:name.trim(),buyPrice:b,sellPrice:s,stock:q,updatedAt:serverTimestamp()});await loadData();}
+ if(del){const p=products.find(x=>x.id===del);if(!p||!confirm("Delete "+p.name+"? This does not delete past sales."))return;await deleteDoc(doc(db,"products",del));await loadData();}
+ }catch(err){message("Product action failed: "+err.message,true);}
+});
+$("recordSaleBtn").addEventListener("click",async()=>{
+ try{
+ requireOwner();const productId=$("saleProduct").value,quantity=Number($("saleQty").value),customerName=$("customerName").value.trim()||"Walk-in",customerPhone=$("customerPhone").value.trim(),paid=Number($("paidAmount").value);
+ if(!productId||!Number.isInteger(quantity)||quantity<1||paid<0)throw new Error("Choose a product and enter a valid quantity and payment amount.");
+ const p=products.find(x=>x.id===productId);if(!p)throw new Error("Product not found. Refresh and try again.");
+ const total=Number(p.sellPrice)*quantity;if(paid>total)throw new Error("Amount paid cannot exceed the sale total in this version.");
+ await runTransaction(db,async tx=>{
+  const pref=doc(db,"products",productId),snap=await tx.get(pref);if(!snap.exists())throw new Error("Product no longer exists.");
+  const current=snap.data();if(Number(current.stock||0)<quantity)throw new Error("Not enough stock available.");
+  tx.update(pref,{stock:Number(current.stock||0)-quantity,updatedAt:serverTimestamp()});
+  const sref=doc(collection(db,"sales"));tx.set(sref,{productId,productName:current.name,quantity,unitPrice:Number(current.sellPrice),total,customerName,customerPhone,paid,balance:total-paid,createdAt:serverTimestamp(),clientTime:Date.now()});
+ });
+ $("customerName").value="";$("customerPhone").value="";$("paidAmount").value="0";$("saleQty").value="1";await loadData();message("Sale recorded and stock updated successfully.");
+ }catch(e){message("Could not record sale: "+e.message,true);}
+});
+$("savePaymentBtn").addEventListener("click",()=>{const details={bankName:$("bankName").value.trim(),accountName:$("accountName").value.trim(),accountNumber:$("accountNumber").value.trim()};localStorage.setItem("olaPaymentDetails",JSON.stringify(details));message("Payment details saved on this device only.");});
+try{const d=JSON.parse(localStorage.getItem("olaPaymentDetails")||"{}");$("bankName").value=d.bankName||"";$("accountName").value=d.accountName||"";$("accountNumber").value=d.accountNumber||"";}catch{}
+</script>
+</body>
+</html>
