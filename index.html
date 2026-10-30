@@ -36,6 +36,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 <div class="stat"><strong id="stockCount">0</strong><span>Total stock units</span></div>
 <div class="stat"><strong id="todaySales">₦0</strong><span>Today's sales</span></div>
 <div class="stat"><strong id="allSales">₦0</strong><span>Recorded sales total</span></div>
+<div class="stat"><strong id="todayProfit">₦0</strong><span>Today's net profit*</span></div>
+<div class="stat"><strong id="allProfit">₦0</strong><span>Recorded net profit*</span></div>
 </div>
 </div>
 <div class="card"><h2>Add a product</h2>
@@ -54,9 +56,13 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 <div><label for="customerName">Customer name</label><input id="customerName" placeholder="Customer name"></div>
 <div><label for="customerPhone">Customer phone (optional)</label><input id="customerPhone" type="tel" placeholder="Phone number"></div>
 <div><label for="paidAmount">Amount paid (₦)</label><input id="paidAmount" type="number" min="0" step="0.01" value="0"></div>
-</div><p class="muted">The sale total is calculated from the product selling price. Outstanding balance is recorded if payment is partial.</p><button id="recordSaleBtn">Record sale and update stock</button>
+<div><label for="transportExpense">Transport (₦)</label><input id="transportExpense" type="number" min="0" step="0.01" value="0"></div>
+<div><label for="loadingExpense">Loading / unloading (₦)</label><input id="loadingExpense" type="number" min="0" step="0.01" value="0"></div>
+<div><label for="deliveryExpense">Delivery (₦)</label><input id="deliveryExpense" type="number" min="0" step="0.01" value="0"></div>
+<div><label for="otherExpense">Other expenses (₦)</label><input id="otherExpense" type="number" min="0" step="0.01" value="0"></div>
+</div><p class="muted">The sale total is calculated from the product selling price. Enter any expenses for this sale. Net profit = (selling price − buying price) × quantity − expenses. Outstanding balance is recorded if payment is partial.</p><button id="recordSaleBtn">Record sale and update stock</button>
 </div>
-<div class="card"><h2>Sales history</h2><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Product</th><th>Qty</th><th>Customer</th><th>Total ₦</th><th>Paid ₦</th><th>Balance ₦</th></tr></thead><tbody id="salesBody"><tr><td colspan="7">Sign in to load sales.</td></tr></tbody></table></div></div>
+<div class="card"><h2>Sales history & customer balances</h2><p class="muted">Use Receive payment to add a later payment to an existing sale. It will not create another sale or deduct stock again. *Profit for older sales may be incomplete if buying price or expenses were not saved at the time.</p><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Product</th><th>Qty</th><th>Customer</th><th>Total ₦</th><th>Paid ₦</th><th>Balance ₦</th><th>Net profit ₦</th><th>Action</th></tr></thead><tbody id="salesBody"><tr><td colspan="9">Sign in to load sales.</td></tr></tbody></table></div></div>
 <div class="card"><h2>Payment details</h2><p class="muted">These details are saved in your browser session on this device only in this version. Do not enter banking passwords or PINs.</p>
 <div class="grid"><div><label for="bankName">Bank / provider</label><input id="bankName" placeholder="e.g. OPay"></div><div><label for="accountName">Account name</label><input id="accountName" placeholder="Account holder name"></div><div><label for="accountNumber">Account number</label><input id="accountNumber" inputmode="numeric" placeholder="Account number"></div></div><button id="savePaymentBtn" class="secondary">Save payment details on this device</button>
 </div>
@@ -99,12 +105,16 @@ function render(){
  $("productCount").textContent=products.length;
  $("stockCount").textContent=products.reduce((s,p)=>s+Number(p.stock||0),0);
  const start=new Date();start.setHours(0,0,0,0);
- const today=sales.filter(s=>{const d=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||0);return d>=start;}).reduce((n,s)=>n+Number(s.total||0),0);
+ const isToday=s=>{const d=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||0);return d>=start;};
+ const today=sales.filter(isToday).reduce((n,s)=>n+Number(s.total||0),0);
+ const profit=s=>Number(s.profit ?? ((Number(s.unitPrice||0)-Number(s.buyPriceAtSale||0))*Number(s.quantity||0)-Number(s.expensesTotal||0)));
  $("todaySales").textContent=money(today);
  $("allSales").textContent=money(sales.reduce((n,s)=>n+Number(s.total||0),0));
+ $("todayProfit").textContent=money(sales.filter(isToday).reduce((n,s)=>n+profit(s),0));
+ $("allProfit").textContent=money(sales.reduce((n,s)=>n+profit(s),0));
  $("productsBody").innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${money(p.buyPrice)}</td><td>${money(p.sellPrice)}</td><td>${Number(p.stock||0)}</td><td class="rowactions"><button class="small secondary" data-edit="${p.id}">Edit</button><button class="small danger" data-delete="${p.id}">Delete</button></td></tr>`).join(""):'<tr><td colspan="5">No products yet. Add your first product above.</td></tr>';
  $("saleProduct").innerHTML='<option value="">Choose product</option>'+products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.sellPrice)} (stock ${Number(p.stock||0)})</option>`).join("");
- $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}</td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(s.balance)}</td></tr>`}).join(""):'<tr><td colspan="7">No sales recorded yet.</td></tr>';
+ $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());const bal=Math.max(0,Number(s.balance||0));const profit=Number(s.profit ?? ((Number(s.unitPrice||0)-Number(s.buyPriceAtSale||0))*Number(s.quantity||0)-Number(s.expensesTotal||0)));const action=bal>0?`<button class="small" data-payment="${s.id}">Receive payment</button>`:"<span>Paid in full</span>";return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}<br><span class="muted">${esc(s.customerPhone||"")}</span></td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(bal)}</td><td>${money(profit)}</td><td>${action}</td></tr>`}).join(""):'<tr><td colspan="9">No sales recorded yet.</td></tr>';
 }
 $("loginBtn").addEventListener("click",async()=>{try{message("Signing in…");await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);$("password").value="";}catch(e){message("Sign-in failed: "+(e.message||e),true);}});
 $("logoutBtn").addEventListener("click",async()=>{await signOut(auth);});
@@ -134,17 +144,33 @@ $("productsBody").addEventListener("click",async e=>{
 $("recordSaleBtn").addEventListener("click",async()=>{
  try{
  requireOwner();const productId=$("saleProduct").value,quantity=Number($("saleQty").value),customerName=$("customerName").value.trim()||"Walk-in",customerPhone=$("customerPhone").value.trim(),paid=Number($("paidAmount").value);
- if(!productId||!Number.isInteger(quantity)||quantity<1||paid<0)throw new Error("Choose a product and enter a valid quantity and payment amount.");
+ const transportExpense=Number($("transportExpense").value||0),loadingExpense=Number($("loadingExpense").value||0),deliveryExpense=Number($("deliveryExpense").value||0),otherExpense=Number($("otherExpense").value||0);
+ const expenses=[transportExpense,loadingExpense,deliveryExpense,otherExpense];
+ if(!productId||!Number.isInteger(quantity)||quantity<1||paid<0||expenses.some(x=>!Number.isFinite(x)||x<0))throw new Error("Choose a product and enter valid non-negative payment and expense amounts.");
  const p=products.find(x=>x.id===productId);if(!p)throw new Error("Product not found. Refresh and try again.");
- const total=Number(p.sellPrice)*quantity;if(paid>total)throw new Error("Amount paid cannot exceed the sale total in this version.");
+ const total=Number(p.sellPrice)*quantity;if(paid>total)throw new Error("Amount paid cannot exceed the sale total.");const expensesTotal=expenses.reduce((a,b)=>a+b,0);const buyPriceAtSale=Number(p.buyPrice||0);const profit=(Number(p.sellPrice)-buyPriceAtSale)*quantity-expensesTotal;
  await runTransaction(db,async tx=>{
   const pref=doc(db,"products",productId),snap=await tx.get(pref);if(!snap.exists())throw new Error("Product no longer exists.");
   const current=snap.data();if(Number(current.stock||0)<quantity)throw new Error("Not enough stock available.");
   tx.update(pref,{stock:Number(current.stock||0)-quantity,updatedAt:serverTimestamp()});
-  const sref=doc(collection(db,"sales"));tx.set(sref,{productId,productName:current.name,quantity,unitPrice:Number(current.sellPrice),total,customerName,customerPhone,paid,balance:total-paid,createdAt:serverTimestamp(),clientTime:Date.now()});
+  const sref=doc(collection(db,"sales"));const saleBuyPrice=Number(current.buyPrice||0);const saleExpenses={transport:transportExpense,loading:loadingExpense,delivery:deliveryExpense,other:otherExpense};const saleExpensesTotal=expensesTotal;const saleProfit=(Number(current.sellPrice)-saleBuyPrice)*quantity-saleExpensesTotal;
+  tx.set(sref,{productId,productName:current.name,quantity,unitPrice:Number(current.sellPrice),buyPriceAtSale:saleBuyPrice,total,customerName,customerPhone,paid,balance:total-paid,expenses:saleExpenses,expensesTotal:saleExpensesTotal,profit:saleProfit,paymentHistory:paid>0?[{amount:paid,method:"Initial payment",date:Date.now(),note:"Payment at sale"}]:[],createdAt:serverTimestamp(),clientTime:Date.now()});
  });
- $("customerName").value="";$("customerPhone").value="";$("paidAmount").value="0";$("saleQty").value="1";await loadData();message("Sale recorded and stock updated successfully.");
+ $("customerName").value="";$("customerPhone").value="";$("paidAmount").value="0";$("saleQty").value="1";$("transportExpense").value="0";$("loadingExpense").value="0";$("deliveryExpense").value="0";$("otherExpense").value="0";await loadData();message("Sale recorded, stock updated, and profit calculated after entered expenses.");
  }catch(e){message("Could not record sale: "+e.message,true);}
+});
+$("salesBody").addEventListener("click",async e=>{
+ const saleId=e.target.dataset.payment;if(!saleId)return;
+ try{
+  requireOwner();const sale=sales.find(x=>x.id===saleId);if(!sale)return;
+  const balance=Math.max(0,Number(sale.balance||0));if(balance<=0){message("This sale is already paid in full.");return;}
+  const raw=prompt(`Customer: ${sale.customerName||"Walk-in"}\nOutstanding balance: ${money(balance)}\nEnter the amount received now (₦):`);if(raw===null)return;
+  const amount=Number(raw);if(!Number.isFinite(amount)||amount<=0)throw new Error("Enter a payment amount greater than zero.");if(amount>balance)throw new Error("Payment cannot be greater than the outstanding balance.");
+  const method=prompt("Payment method (Cash, Bank transfer, OPay, etc.):","Bank transfer");if(method===null)return;
+  const note=prompt("Optional payment note:","");if(note===null)return;
+  await runTransaction(db,async tx=>{const ref=doc(db,"sales",saleId);const snap=await tx.get(ref);if(!snap.exists())throw new Error("Sale no longer exists.");const data=snap.data();const currentBalance=Math.max(0,Number(data.balance||0));if(amount>currentBalance)throw new Error("The balance changed. Refresh records and try again.");const currentPaid=Number(data.paid||0);const history=Array.isArray(data.paymentHistory)?data.paymentHistory:[];history.push({amount,method:method.trim()||"Not specified",note:note.trim(),date:Date.now()});tx.update(ref,{paid:currentPaid+amount,balance:currentBalance-amount,paymentHistory:history,lastPaymentAt:serverTimestamp(),updatedAt:serverTimestamp()});});
+  await loadData();message(`Payment of ${money(amount)} recorded. Remaining balance: ${money(balance-amount)}.`);
+ }catch(err){message("Could not record payment: "+err.message,true);}
 });
 $("savePaymentBtn").addEventListener("click",()=>{const details={bankName:$("bankName").value.trim(),accountName:$("accountName").value.trim(),accountNumber:$("accountNumber").value.trim()};localStorage.setItem("olaPaymentDetails",JSON.stringify(details));message("Payment details saved on this device only.");});
 try{const d=JSON.parse(localStorage.getItem("olaPaymentDetails")||"{}");$("bankName").value=d.bankName||"";$("accountName").value=d.accountName||"";$("accountNumber").value=d.accountNumber||"";}catch{}
