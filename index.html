@@ -63,6 +63,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 </div><p class="muted">The sale total is calculated from the product selling price. Enter any expenses for this sale. Net profit = (selling price − buying price) × quantity − expenses. Outstanding balance is recorded if payment is partial.</p><button id="recordSaleBtn">Record sale and update stock</button>
 </div>
 <div class="card"><h2>Sales history & customer balances</h2><p class="muted">Use Receive payment to add a later payment to an existing sale. It will not create another sale or deduct stock again. *Profit for older sales may be incomplete if buying price or expenses were not saved at the time.</p><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Product</th><th>Qty</th><th>Customer</th><th>Total ₦</th><th>Paid ₦</th><th>Balance ₦</th><th>Net profit ₦</th><th>Action</th></tr></thead><tbody id="salesBody"><tr><td colspan="9">Sign in to load sales.</td></tr></tbody></table></div></div>
+<div class="card"><h2>Payment history</h2><p class="muted">Each payment is shown with the date and time recorded automatically from this device. The time displayed is your phone/browser local time.</p><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Customer</th><th>Product</th><th>Amount received</th><th>Method</th><th>Note</th></tr></thead><tbody id="paymentHistoryBody"><tr><td colspan="6">Sign in to load payment history.</td></tr></tbody></table></div></div>
 <div class="card"><h2>Payment details</h2><p class="muted">These details are saved in your browser session on this device only in this version. Do not enter banking passwords or PINs.</p>
 <div class="grid"><div><label for="bankName">Bank / provider</label><input id="bankName" placeholder="e.g. OPay"></div><div><label for="accountName">Account name</label><input id="accountName" placeholder="Account holder name"></div><div><label for="accountNumber">Account number</label><input id="accountNumber" inputmode="numeric" placeholder="Account number"></div></div><button id="savePaymentBtn" class="secondary">Save payment details on this device</button>
 </div>
@@ -115,6 +116,20 @@ function render(){
  $("productsBody").innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${money(p.buyPrice)}</td><td>${money(p.sellPrice)}</td><td>${Number(p.stock||0)}</td><td class="rowactions"><button class="small secondary" data-edit="${p.id}">Edit</button><button class="small danger" data-delete="${p.id}">Delete</button></td></tr>`).join(""):'<tr><td colspan="5">No products yet. Add your first product above.</td></tr>';
  $("saleProduct").innerHTML='<option value="">Choose product</option>'+products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.sellPrice)} (stock ${Number(p.stock||0)})</option>`).join("");
  $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());const bal=Math.max(0,Number(s.balance||0));const profit=Number(s.profit ?? ((Number(s.unitPrice||0)-Number(s.buyPriceAtSale||0))*Number(s.quantity||0)-Number(s.expensesTotal||0)));const action=bal>0?`<button class="small" data-payment="${s.id}">Receive payment</button>`:"<span>Paid in full</span>";return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}<br><span class="muted">${esc(s.customerPhone||"")}</span></td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(bal)}</td><td>${money(profit)}</td><td>${action}</td></tr>`}).join(""):'<tr><td colspan="9">No sales recorded yet.</td></tr>';
+ const paymentRows=[];
+ for(const s of sales){
+  const history=Array.isArray(s.paymentHistory)?s.paymentHistory:[];
+  for(const item of history){
+   let paymentDate;
+   if(item.date?.toDate) paymentDate=item.date.toDate();
+   else if(item.date && typeof item.date==='object' && Number.isFinite(item.date.seconds)) paymentDate=new Date(item.date.seconds*1000);
+   else paymentDate=new Date(Number(item.date||0));
+   if(!Number.isFinite(paymentDate.getTime())) continue;
+   paymentRows.push({date:paymentDate,customer:s.customerName||"Walk-in",product:s.productName||"",amount:Number(item.amount||0),method:item.method||"Not specified",note:item.note||""});
+  }
+ }
+ paymentRows.sort((a,b)=>b.date-a.date);
+ $("paymentHistoryBody").innerHTML=paymentRows.length?paymentRows.map(p=>`<tr><td>${esc(p.date.toLocaleString())}</td><td>${esc(p.customer)}</td><td>${esc(p.product)}</td><td>${money(p.amount)}</td><td>${esc(p.method)}</td><td>${esc(p.note)}</td></tr>`).join(""):'<tr><td colspan="6">No payment history has been saved yet.</td></tr>';
 }
 $("loginBtn").addEventListener("click",async()=>{try{message("Signing in…");await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);$("password").value="";}catch(e){message("Sign-in failed: "+(e.message||e),true);}});
 $("logoutBtn").addEventListener("click",async()=>{await signOut(auth);});
