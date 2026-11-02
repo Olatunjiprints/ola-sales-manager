@@ -108,14 +108,22 @@ function render(){
  const start=new Date();start.setHours(0,0,0,0);
  const isToday=s=>{const d=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||0);return d>=start;};
  const today=sales.filter(isToday).reduce((n,s)=>n+Number(s.total||0),0);
- const profit=s=>Number(s.profit ?? ((Number(s.unitPrice||0)-Number(s.buyPriceAtSale||0))*Number(s.quantity||0)-Number(s.expensesTotal||0)));
+ // Older sales may not have saved buyPriceAtSale. For those records,
+ // use the current product buying price as a fallback without changing Firebase data.
+ const calculateProfit=s=>{
+  const linkedProduct=products.find(p=>p.id===s.productId) || products.find(p=>(p.name||"") === (s.productName||""));
+  const buyPrice = s.buyPriceAtSale !== undefined && s.buyPriceAtSale !== null
+    ? Number(s.buyPriceAtSale)
+    : Number(linkedProduct?.buyPrice ?? 0);
+  return Number(s.profit ?? ((Number(s.unitPrice||0)-buyPrice)*Number(s.quantity||0)-Number(s.expensesTotal||0)));
+ };
  $("todaySales").textContent=money(today);
  $("allSales").textContent=money(sales.reduce((n,s)=>n+Number(s.total||0),0));
- $("todayProfit").textContent=money(sales.filter(isToday).reduce((n,s)=>n+profit(s),0));
- $("allProfit").textContent=money(sales.reduce((n,s)=>n+profit(s),0));
+ $("todayProfit").textContent=money(sales.filter(isToday).reduce((n,s)=>n+calculateProfit(s),0));
+ $("allProfit").textContent=money(sales.reduce((n,s)=>n+calculateProfit(s),0));
  $("productsBody").innerHTML=products.length?products.map(p=>`<tr><td>${esc(p.name)}</td><td>${money(p.buyPrice)}</td><td>${money(p.sellPrice)}</td><td>${Number(p.stock||0)}</td><td class="rowactions"><button class="small secondary" data-edit="${p.id}">Edit</button><button class="small danger" data-delete="${p.id}">Delete</button></td></tr>`).join(""):'<tr><td colspan="5">No products yet. Add your first product above.</td></tr>';
  $("saleProduct").innerHTML='<option value="">Choose product</option>'+products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${money(p.sellPrice)} (stock ${Number(p.stock||0)})</option>`).join("");
- $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());const bal=Math.max(0,Number(s.balance||0));const profit=Number(s.profit ?? ((Number(s.unitPrice||0)-Number(s.buyPriceAtSale||0))*Number(s.quantity||0)-Number(s.expensesTotal||0)));const action=bal>0?`<button class="small" data-payment="${s.id}">Receive payment</button>`:"<span>Paid in full</span>";return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}<br><span class="muted">${esc(s.customerPhone||"")}</span></td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(bal)}</td><td>${money(profit)}</td><td>${action}</td></tr>`}).join(""):'<tr><td colspan="9">No sales recorded yet.</td></tr>';
+ $("salesBody").innerHTML=sales.length?sales.map(s=>{const dt=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||Date.now());const bal=Math.max(0,Number(s.balance||0));const profit=calculateProfit(s);const action=bal>0?`<button class="small" data-payment="${s.id}">Receive payment</button>`:"<span>Paid in full</span>";return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(s.productName)}</td><td>${Number(s.quantity||0)}</td><td>${esc(s.customerName||"Walk-in")}<br><span class="muted">${esc(s.customerPhone||"")}</span></td><td>${money(s.total)}</td><td>${money(s.paid)}</td><td>${money(bal)}</td><td>${money(profit)}</td><td>${action}</td></tr>`}).join(""):'<tr><td colspan="9">No sales recorded yet.</td></tr>';
  const paymentRows=[];
  for(const s of sales){
   const history=Array.isArray(s.paymentHistory)?s.paymentHistory:[];
