@@ -64,8 +64,9 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 </div>
 <div class="card"><h2>Sales history & customer balances</h2><p class="muted">Use Receive payment to add a later payment to an existing sale. It will not create another sale or deduct stock again. *Profit for older sales may be incomplete if buying price or expenses were not saved at the time.</p><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Product</th><th>Qty</th><th>Customer</th><th>Total ₦</th><th>Paid ₦</th><th>Balance ₦</th><th>Net profit ₦</th><th>Action</th></tr></thead><tbody id="salesBody"><tr><td colspan="9">Sign in to load sales.</td></tr></tbody></table></div></div>
 <div class="card"><h2>Payment history</h2><p class="muted">Each payment is shown with the date and time recorded automatically from this device. The time displayed is your phone/browser local time.</p><div class="tablewrap"><table><thead><tr><th>Date / time</th><th>Customer</th><th>Product</th><th>Amount received</th><th>Method</th><th>Note</th></tr></thead><tbody id="paymentHistoryBody"><tr><td colspan="6">Sign in to load payment history.</td></tr></tbody></table></div></div>
-<div class="card"><h2>Payment details</h2><p class="muted">These details are saved in your browser session on this device only in this version. Do not enter banking passwords or PINs.</p>
-<div class="grid"><div><label for="bankName">Bank / provider</label><input id="bankName" placeholder="e.g. OPay"></div><div><label for="accountName">Account name</label><input id="accountName" placeholder="Account holder name"></div><div><label for="accountNumber">Account number</label><input id="accountNumber" inputmode="numeric" placeholder="Account number"></div></div><button id="savePaymentBtn" class="secondary">Save payment details on this device</button>
+<div class="card"><h2>Customer orders from Ola Shop</h2><p class="muted">Orders will appear here when Ola Shop is connected. Accepting an order deducts stock; verify payment yourself.</p><div class="tablewrap"><table><thead><tr><th>Date</th><th>Customer</th><th>Order</th><th>Status</th><th>Action</th></tr></thead><tbody id="ordersBody"><tr><td colspan="5">No orders yet.</td></tr></tbody></table></div></div>
+<div class="card"><h2>Payment details for Ola Shop</h2><p class="muted">A limited copy of these details will be visible to customers. Never enter banking passwords or PINs.</p>
+<div class="grid"><div><label for="bankName">Bank / provider</label><input id="bankName" placeholder="e.g. OPay"></div><div><label for="accountName">Account name</label><input id="accountName" placeholder="Account holder name"></div><div><label for="accountNumber">Account number</label><input id="accountNumber" inputmode="numeric" placeholder="Account number"></div></div><button id="savePaymentBtn" class="secondary">Save and publish payment details to Ola Shop</button>
 </div>
 </section>
 <footer>Ola Sales Manager · Keep regular backups of your business records.</footer>
@@ -73,7 +74,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, runTransaction, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD7n7LhL1kqGQSIG9NuqsM_lIeMAp_boJY",
@@ -88,7 +89,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const $ = id => document.getElementById(id);
-let products = [], sales = [];
+let products = [], sales = [], orders = [];
 
 function message(text, error=false){$("message").textContent=text;$("message").classList.toggle("error",error);}
 function money(n){return "₦"+Number(n||0).toLocaleString("en-NG",{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -96,9 +97,11 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function requireOwner(){if(!auth.currentUser || auth.currentUser.uid!==OWNER_UID) throw new Error("This account is not the configured owner account. Sign in with the owner account.");}
 async function loadData(){
  requireOwner();
- const [pSnap,sSnap]=await Promise.all([getDocs(collection(db,"products")),getDocs(collection(db,"sales"))]);
+ const [pSnap,sSnap,oSnap]=await Promise.all([getDocs(collection(db,"products")),getDocs(collection(db,"sales")),getDocs(collection(db,"orders"))]);
  products=pSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
  sales=sSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+ orders=oSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+ for(const p of products) await setDoc(doc(db,"shopProducts",p.id),{name:p.name,sellPrice:Number(p.sellPrice||0),stock:Number(p.stock||0),active:true,updatedAt:serverTimestamp()},{merge:true});
  render();
  message("Connected. Products and sales loaded from Firebase.");
 }
@@ -137,6 +140,7 @@ function render(){
   }
  }
  paymentRows.sort((a,b)=>b.date-a.date);
+ $("ordersBody").innerHTML=orders.length?orders.map(o=>{const dt=o.createdAt?.toDate?o.createdAt.toDate():new Date(o.clientTime||Date.now());const lines=Array.isArray(o.items)?o.items.map(i=>esc(i.name)+" × "+Number(i.quantity)).join("<br>"):"Order details";const st=o.status||"pending";const act=st==="pending"?`<button class="small" data-accept="${o.id}">Accept & deduct stock</button><button class="small danger" data-reject="${o.id}">Reject</button>`:esc(st);return `<tr><td>${esc(dt.toLocaleString())}</td><td>${esc(o.customerName||"Customer")}<br>${esc(o.phone||"")}</td><td>${lines}</td><td>${esc(st)}</td><td>${act}</td></tr>`}).join(""):`<tr><td colspan="5">No orders yet.</td></tr>`;
  $("paymentHistoryBody").innerHTML=paymentRows.length?paymentRows.map(p=>`<tr><td>${esc(p.date.toLocaleString())}</td><td>${esc(p.customer)}</td><td>${esc(p.product)}</td><td>${money(p.amount)}</td><td>${esc(p.method)}</td><td>${esc(p.note)}</td></tr>`).join(""):'<tr><td colspan="6">No payment history has been saved yet.</td></tr>';
 }
 $("loginBtn").addEventListener("click",async()=>{try{message("Signing in…");await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);$("password").value="";}catch(e){message("Sign-in failed: "+(e.message||e),true);}});
@@ -151,7 +155,7 @@ onAuthStateChanged(auth,async user=>{
 $("addProductBtn").addEventListener("click",async()=>{
  try{requireOwner();const name=$("pname").value.trim(),buyPrice=Number($("pbuy").value),sellPrice=Number($("psell").value),stock=Number($("pstock").value);
  if(!name||buyPrice<0||sellPrice<0||stock<0||!Number.isInteger(stock))throw new Error("Enter a product name and valid non-negative prices and whole-number stock.");
- await addDoc(collection(db,"products"),{name,buyPrice,sellPrice,stock,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+ const nr=doc(collection(db,"products"));await setDoc(nr,{name,buyPrice,sellPrice,stock,createdAt:serverTimestamp(),updatedAt:serverTimestamp()});await setDoc(doc(db,"shopProducts",nr.id),{name,sellPrice,stock,active:true,updatedAt:serverTimestamp()});
  $("pname").value="";$("pbuy").value="0";$("psell").value="0";$("pstock").value="0";await loadData();
  }catch(e){message("Could not save product: "+e.message,true);}
 });
@@ -160,8 +164,8 @@ $("productsBody").addEventListener("click",async e=>{
  try{requireOwner();
  if(edit){const p=products.find(x=>x.id===edit);if(!p)return;const name=prompt("Product name:",p.name);if(name===null)return;const sell=prompt("Selling price (₦):",p.sellPrice);if(sell===null)return;const buy=prompt("Buying price (₦):",p.buyPrice);if(buy===null)return;const stock=prompt("Stock quantity:",p.stock);if(stock===null)return;
  const b=Number(buy),s=Number(sell),q=Number(stock);if(!name.trim()||b<0||s<0||q<0||!Number.isInteger(q))throw new Error("Invalid product details.");
- await updateDoc(doc(db,"products",edit),{name:name.trim(),buyPrice:b,sellPrice:s,stock:q,updatedAt:serverTimestamp()});await loadData();}
- if(del){const p=products.find(x=>x.id===del);if(!p||!confirm("Delete "+p.name+"? This does not delete past sales."))return;await deleteDoc(doc(db,"products",del));await loadData();}
+ await updateDoc(doc(db,"products",edit),{name:name.trim(),buyPrice:b,sellPrice:s,stock:q,updatedAt:serverTimestamp()});await setDoc(doc(db,"shopProducts",edit),{name:name.trim(),sellPrice:s,stock:q,active:true,updatedAt:serverTimestamp()},{merge:true});await loadData();}
+ if(del){const p=products.find(x=>x.id===del);if(!p||!confirm("Delete "+p.name+"? This does not delete past sales."))return;await deleteDoc(doc(db,"products",del));await deleteDoc(doc(db,"shopProducts",del));await loadData();}
  }catch(err){message("Product action failed: "+err.message,true);}
 });
 $("recordSaleBtn").addEventListener("click",async()=>{
@@ -173,9 +177,9 @@ $("recordSaleBtn").addEventListener("click",async()=>{
  const p=products.find(x=>x.id===productId);if(!p)throw new Error("Product not found. Refresh and try again.");
  const total=Number(p.sellPrice)*quantity;if(paid>total)throw new Error("Amount paid cannot exceed the sale total.");const expensesTotal=expenses.reduce((a,b)=>a+b,0);const buyPriceAtSale=Number(p.buyPrice||0);const profit=(Number(p.sellPrice)-buyPriceAtSale)*quantity-expensesTotal;
  await runTransaction(db,async tx=>{
-  const pref=doc(db,"products",productId),snap=await tx.get(pref);if(!snap.exists())throw new Error("Product no longer exists.");
+  const pref=doc(db,"products",productId),pubref=doc(db,"shopProducts",productId);const snap=await tx.get(pref);const pubSnap=await tx.get(pubref);if(!snap.exists())throw new Error("Product no longer exists.");
   const current=snap.data();if(Number(current.stock||0)<quantity)throw new Error("Not enough stock available.");
-  tx.update(pref,{stock:Number(current.stock||0)-quantity,updatedAt:serverTimestamp()});
+  tx.update(pref,{stock:Number(current.stock||0)-quantity,updatedAt:serverTimestamp()});if(pubSnap.exists())tx.update(pubref,{stock:Number(current.stock||0)-quantity,updatedAt:serverTimestamp()});
   const sref=doc(collection(db,"sales"));const saleBuyPrice=Number(current.buyPrice||0);const saleExpenses={transport:transportExpense,loading:loadingExpense,delivery:deliveryExpense,other:otherExpense};const saleExpensesTotal=expensesTotal;const saleProfit=(Number(current.sellPrice)-saleBuyPrice)*quantity-saleExpensesTotal;
   tx.set(sref,{productId,productName:current.name,quantity,unitPrice:Number(current.sellPrice),buyPriceAtSale:saleBuyPrice,total,customerName,customerPhone,paid,balance:total-paid,expenses:saleExpenses,expensesTotal:saleExpensesTotal,profit:saleProfit,paymentHistory:paid>0?[{amount:paid,method:"Initial payment",date:Date.now(),note:"Payment at sale"}]:[],createdAt:serverTimestamp(),clientTime:Date.now()});
  });
@@ -195,8 +199,9 @@ $("salesBody").addEventListener("click",async e=>{
   await loadData();message(`Payment of ${money(amount)} recorded. Remaining balance: ${money(balance-amount)}.`);
  }catch(err){message("Could not record payment: "+err.message,true);}
 });
-$("savePaymentBtn").addEventListener("click",()=>{const details={bankName:$("bankName").value.trim(),accountName:$("accountName").value.trim(),accountNumber:$("accountNumber").value.trim()};localStorage.setItem("olaPaymentDetails",JSON.stringify(details));message("Payment details saved on this device only.");});
+$("savePaymentBtn").addEventListener("click",async()=>{try{requireOwner();const d={bankName:$("bankName").value.trim(),accountName:$("accountName").value.trim(),accountNumber:$("accountNumber").value.trim()};if(!d.bankName||!d.accountName||!d.accountNumber)throw new Error("Complete all payment fields.");await setDoc(doc(db,"settings","payment"),{...d,updatedAt:serverTimestamp()});await setDoc(doc(db,"shopSettings","payment"),{provider:d.bankName,accountName:d.accountName,accountNumber:d.accountNumber,updatedAt:serverTimestamp()});localStorage.setItem("olaPaymentDetails",JSON.stringify(d));message("Payment details saved and published to Ola Shop.");}catch(e){message("Could not save payment details: "+e.message,true);}});
 try{const d=JSON.parse(localStorage.getItem("olaPaymentDetails")||"{}");$("bankName").value=d.bankName||"";$("accountName").value=d.accountName||"";$("accountNumber").value=d.accountNumber||"";}catch{}
+$("ordersBody").addEventListener("click",async e=>{const aid=e.target.dataset.accept,rid=e.target.dataset.reject;try{requireOwner();if(rid){if(!confirm("Reject this order?"))return;await updateDoc(doc(db,"orders",rid),{status:"rejected",reviewedAt:serverTimestamp()});await loadData();return;}if(!aid)return;const o=orders.find(x=>x.id===aid);if(!o||o.status&&o.status!=="pending")return;const items=Array.isArray(o.items)?o.items:[];if(!items.length)throw new Error("Order items are missing.");await runTransaction(db,async tx=>{const refs=items.map(i=>({i,p:doc(db,"products",i.productId),q:doc(db,"shopProducts",i.productId)}));const reads=[];for(const r of refs){reads.push({r,p:await tx.get(r.p),q:await tx.get(r.q)});}const or=doc(db,"orders",aid),os=await tx.get(or);if(!os.exists()||(os.data().status||"pending")!=="pending")throw new Error("Order is no longer pending.");for(const x of reads){const qty=Number(x.r.i.quantity);if(!x.p.exists()||!Number.isInteger(qty)||qty<1||Number(x.p.data().stock||0)<qty)throw new Error("Insufficient stock or invalid order quantity.");}for(const x of reads){const n=Number(x.p.data().stock||0)-Number(x.r.i.quantity);tx.update(x.r.p,{stock:n,updatedAt:serverTimestamp()});if(x.q.exists())tx.update(x.r.q,{stock:n,updatedAt:serverTimestamp()});}tx.update(or,{status:"accepted",reviewedAt:serverTimestamp()});});await loadData();message("Order accepted and stock deducted. Verify payment separately.");}catch(err){message("Order action failed: "+err.message,true);}});
 </script>
 </body>
-</html>
+</0>
