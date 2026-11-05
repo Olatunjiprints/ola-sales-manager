@@ -40,6 +40,12 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 <div class="stat"><strong id="allProfit">₦0</strong><span>Recorded net profit*</span></div>
 </div>
 </div>
+<div class="stock-breakdown">
+<h3>Stock Breakdown</h3>
+<div id="stockBreakdown" class="tablewrap">
+<p class="muted">Sign in to load stock.</p>
+</div>
+</div>
 <div class="card"><h2>Add a product</h2>
 <div class="grid">
 <div><label for="pname">Product name</label><input id="pname" placeholder="e.g. SAV sticker roll"></div>
@@ -121,6 +127,19 @@ async function loadData(){
 function render(){
  $("productCount").textContent=products.length;
  $("stockCount").textContent=products.reduce((s,p)=>s+Number(p.stock||0),0);
+ const totalStock = products.reduce((sum,p)=>sum+Number(p.stock||0),0);
+
+$("stockBreakdown").innerHTML = products.length
+? `<table>
+<thead><tr><th>Product</th><th>Available stock</th></tr></thead>
+<tbody>
+${products.map(p=>`<tr>
+<td>${esc(p.name)}</td>
+<td>${Number(p.stock||0).toLocaleString("en-NG")} units</td>
+</tr>`).join("")}
+<tr><th>Total</th><th>${totalStock.toLocaleString("en-NG")} units</th></tr>
+</tbody></table>`
+: '<p class="muted">No products yet. Add your first product to see stock here.</p>';
  const start=new Date();start.setHours(0,0,0,0);
  const isToday=s=>{const d=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.clientTime||0);return d>=start;};
  const today=sales.filter(isToday).reduce((n,s)=>n+Number(s.total||0),0);
