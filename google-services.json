@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1024602006134",
+    "project_id": "ola-sales-manager",
+    "storage_bucket": "ola-sales-manager.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1024602006134:android:d1c0e2c17ef5ea8cd13557",
+        "android_client_info": {
+          "package_name": "com.olatunjiprints.olasalesmanager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxHeU_4Mv0fcFuHpd96V690UliyJxNiV8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
