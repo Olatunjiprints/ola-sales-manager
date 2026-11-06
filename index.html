@@ -29,6 +29,17 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:20px}
 <button id="loginBtn">Sign in</button>
 </section>
 <section id="app" class="hidden">
+<section id="lockCard" class="card hidden">
+<h2>Ola Sales Manager Locked</h2>
+<p class="muted">Verify your identity to continue.</p>
+
+<label for="unlockPin">Enter your 4-digit PIN</label>
+<input id="unlockPin" type="password" inputmode="numeric"
+maxlength="4" placeholder="Enter PIN">
+
+<button id="unlockBtn">Unlock</button>
+<p id="lockMessage" class="muted"></p>
+</section>
 <div class="card">
 <div class="grid"><div><h2>Business overview</h2><p class="muted">Amounts shown in Nigerian naira (₦).</p></div><div><button id="refreshBtn" class="secondary">Refresh records</button><button id="logoutBtn" class="danger">Sign out</button></div></div>
 <div class="stats">
@@ -96,6 +107,123 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const $ = id => document.getElementById(id);
 let products = [], sales = [], orders = [];
+// Ola Sales Manager: 4-digit PIN and 10-minute inactivity lock
+const PIN_KEY = "olaManagerPinHash";
+const SALT_KEY = "olaManagerPinSalt";
+const IDLE_LIMIT = 10 * 60 * 1000;
+let lastActivity = Date.now();
+let idleTimer = null;
+let appLocked = true;
+
+async function hashPin(pin, salt) {
+  const data = new TextEncoder().encode(salt + pin);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function setupPin() {
+  while (true) {
+    const pin = prompt("Create your 4-digit Ola Sales Manager PIN:");
+    if (pin === null) throw new Error("PIN setup cancelled.");
+    if (!/^\d{4}$/.test(pin)) {
+      alert("Your PIN must contain exactly 4 digits.");
+      continue;
+    }
+
+    const confirmPin = prompt("Enter the same 4-digit PIN again:");
+    if (confirmPin === null) throw new Error("PIN setup cancelled.");
+    if (pin !== confirmPin) {
+      alert("The PINs do not match. Please try again.");
+      continue;
+    }
+
+    const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+
+    localStorage.setItem(SALT_KEY, salt);
+    localStorage.setItem(PIN_KEY, await hashPin(pin, salt));
+    return;
+  }
+}
+
+function showAppLocked() {
+  appLocked = true;
+  clearTimeout(idleTimer);
+  $("app").classList.add("hidden");
+  $("lockCard").classList.remove("hidden");
+  $("unlockPin").value = "";
+  $("lockMessage").textContent = "Enter your 4-digit PIN to continue.";
+}
+
+function showAppUnlocked() {
+  appLocked = false;
+  $("lockCard").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("unlockPin").value = "";
+  lastActivity = Date.now();
+  startIdleTimer();
+}
+
+function startIdleTimer() {
+  clearTimeout(idleTimer);
+  if (!auth.currentUser || appLocked) return;
+
+  idleTimer = setTimeout(() => {
+    showAppLocked();
+  }, Math.max(0, IDLE_LIMIT - (Date.now() - lastActivity)));
+}
+
+function recordActivity() {
+  if (appLocked || !auth.currentUser) return;
+  lastActivity = Date.now();
+  startIdleTimer();
+}
+
+["click", "keydown", "touchstart", "scroll"].forEach(eventName => {
+  document.addEventListener(eventName, recordActivity, { passive: true });
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && auth.currentUser && !appLocked) {
+    if (Date.now() - lastActivity >= IDLE_LIMIT) {
+      showAppLocked();
+    } else {
+      startIdleTimer();
+    }
+  }
+});
+
+$("unlockBtn").addEventListener("click", async () => {
+  try {
+    const pin = $("unlockPin").value;
+    if (!/^\d{4}$/.test(pin)) {
+      $("lockMessage").textContent = "Enter your complete 4-digit PIN.";
+      return;
+    }
+
+    const salt = localStorage.getItem(SALT_KEY);
+    const savedHash = localStorage.getItem(PIN_KEY);
+
+    if (!salt || !savedHash) {
+      $("lockMessage").textContent = "PIN setup is missing. Please contact the app administrator.";
+      return;
+    }
+
+    const enteredHash = await hashPin(pin, salt);
+
+    if (enteredHash !== savedHash) {
+      $("lockMessage").textContent = "Incorrect PIN. Please try again.";
+      $("unlockPin").value = "";
+      return;
+    }
+
+    showAppUnlocked();
+    message("App unlocked successfully.");
+  } catch (error) {
+    $("lockMessage").textContent = "Could not verify PIN. Please try again.";
+  }
+});
 
 function message(text, error=false){$("message").textContent=text;$("message").classList.toggle("error",error);}
 function money(n){return "₦"+Number(n||0).toLocaleString("en-NG",{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -179,10 +307,36 @@ $("loginBtn").addEventListener("click",async()=>{try{message("Signing in…");aw
 $("logoutBtn").addEventListener("click",async()=>{await signOut(auth);});
 $("refreshBtn").addEventListener("click",async()=>{try{await loadData();}catch(e){message("Could not load records: "+e.message,true);}});
 onAuthStateChanged(auth,async user=>{
- if(!user){$("loginCard").classList.remove("hidden");$("app").classList.add("hidden");message("Sign in with your Firebase owner email and password.");return;}
- if(user.uid!==OWNER_UID){await signOut(auth);message("Access denied: this app is configured for the registered owner account only.",true);return;}
- $("loginCard").classList.add("hidden");$("app").classList.remove("hidden");
- try{await loadData();}catch(e){message("Signed in, but data could not load. Check Firestore rules and internet connection. "+e.message,true);}
+ if(!user){
+  clearTimeout(idleTimer);
+  appLocked=true;
+  $("loginCard").classList.remove("hidden");
+  $("app").classList.add("hidden");
+  $("lockCard").classList.add("hidden");
+  message("Sign in with your Firebase owner email and password.");
+  return;
+ }
+
+ if(user.uid!==OWNER_UID){
+  await signOut(auth);
+  message("Access denied: this app is configured for the registered owner account only.",true);
+  return;
+ }
+
+ $("loginCard").classList.add("hidden");
+
+ try{
+  if(!localStorage.getItem(PIN_KEY)){
+   await setupPin();
+   showAppUnlocked();
+  }else{
+   showAppLocked();
+  }
+
+  await loadData();
+ }catch(e){
+  message("Could not initialise app security or load records: "+e.message,true);
+ }
 });
 $("addProductBtn").addEventListener("click",async()=>{
  try{requireOwner();const name=$("pname").value.trim(),buyPrice=Number($("pbuy").value),sellPrice=Number($("psell").value),stock=Number($("pstock").value);
