@@ -25,7 +25,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Prepare website files
+            - name: Prepare website files
         run: |
           mkdir -p www
           cp index.html www/index.html
@@ -36,6 +36,18 @@ jobs:
       - name: Create Android project
         run: npx cap add android
 
+            - name: Inspect Android Gradle files
+        run: |
+          echo "ROOT BUILD FILE"
+          cat android/build.gradle
+          echo "APP BUILD FILE"
+          cat android/app/build.gradle
+      
+      - name: Prepare Firebase configuration
+        run: |
+          mkdir -p android/app
+          cp google-services.json android/app/google-services.json
+          
       - name: Sync Android project
         run: npx cap sync android
 
