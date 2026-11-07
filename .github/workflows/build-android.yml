@@ -1,6 +1,6 @@
 name: Build Ola Sales Manager APK
 
-on:
+"on":
 workflow_dispatch:
 push:
 branches:
@@ -45,7 +45,6 @@ steps:
 
   - name: Prepare Firebase configuration
     run: |
-      mkdir -p android/app
       cp google-services.json android/app/google-services.json
 
   - name: Sync Android project
