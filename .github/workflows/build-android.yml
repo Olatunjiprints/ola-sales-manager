@@ -1,7 +1,8 @@
 name: Build Ola Sales Manager APK
 
-"on":
+on:
 workflow_dispatch:
+
 push:
 branches:
 - main
