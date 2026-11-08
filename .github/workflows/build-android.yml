@@ -1,4 +1,4 @@
-name: Build Ola Sales Manager APK
+name: pages build and deployment
 
 on:
 workflow_dispatch:
