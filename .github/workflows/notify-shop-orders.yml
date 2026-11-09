@@ -10,8 +10,75 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Notify shop orders
-        run: echo "Checking for new shop orders"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Firebase Admin
+        run: pip install firebase-admin
+
+      - name: Send Order Notifications
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import firebase_admin
+          from firebase_admin import credentials, firestore, messaging
+
+          service_account = json.loads(
+              os.environ["FIREBASE_SERVICE_ACCOUNT"]
+          )
+
+          cred = credentials.Certificate(service_account)
+          firebase_admin.initialize_app(cred)
+
+          db = firestore.client()
+
+          token_doc = db.collection("settings").document("pushDevice").get()
+
+          if not token_doc.exists:
+              print("Notification device not found")
+              exit(0)
+
+          token = token_doc.to_dict().get("token")
+
+          if not token:
+              print("Notification token missing")
+              exit(0)
+
+          orders = db.collection("orders").where(
+              "status", "==", "pending"
+          ).stream()
+
+          for order in orders:
+              data = order.to_dict()
+
+              if data.get("notificationSent") is True:
+                  continue
+
+              customer = data.get("customerName", "A customer")
+
+              message = messaging.Message(
+                  notification=messaging.Notification(
+                      title="New Ola Shop Order",
+                      body=f"New order received from {customer}"
+                  ),
+                  token=token
+              )
+
+              messaging.send(message)
+
+              order.reference.update({
+                  "notificationSent": True
+              })
+
+              print("Notification sent:", order.id)
+
+          print("Notification check completed")
+          PY
