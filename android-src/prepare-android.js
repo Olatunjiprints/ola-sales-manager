@@ -12,7 +12,7 @@ throw new Error("Could not find the main index.html file.");
 
 let html = fs.readFileSync(sourceFile, "utf8");
 
-const scriptPattern = /<script type="module">([\s\S]*?)</script>/i;
+const scriptPattern = /<script type="module">([\s\S]*?)<\/script>/i;
 const match = html.match(scriptPattern);
 
 if (!match) {
