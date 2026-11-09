@@ -1,6 +1,6 @@
 name: pages build and deployment
 
-on:
+'on':
 workflow_dispatch:
 push:
 branches:
